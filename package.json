@@ -1,0 +1,75 @@
+{
+  "name": "cue.js",
+  "version": "0.1.0",
+  "description": "A browser library for building voice-following teleprompters",
+  "keywords": [
+    "teleprompter",
+    "speech-recognition",
+    "voice-tracking",
+    "browser",
+    "wasm"
+  ],
+  "author": "Erik Eide <351763+erkde@users.noreply.github.com>",
+  "contributors": [
+    {
+      "name": "OpenAI Codex"
+    }
+  ],
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/erkde/cue.js#readme",
+  "bugs": {
+    "url": "https://github.com/erkde/cue.js/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/erkde/cue.js.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "npm": ">=11.10.0"
+  },
+  "type": "module",
+  "types": "./src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "import": "./dist/cue.js"
+    },
+    "./models": {
+      "types": "./src/models/index.d.ts",
+      "import": "./dist/models.js"
+    },
+    "./models/moonshine": {
+      "types": "./src/models/moonshine.d.ts",
+      "import": "./dist/models/moonshine.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src/index.d.ts",
+    "src/models/index.d.ts",
+    "src/models/moonshine.d.ts"
+  ],
+  "scripts": {
+    "dev": "vite demo",
+    "build": "vite build",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
+    "lint": "eslint . --max-warnings=0",
+    "test": "node --test",
+    "check": "npm run format:check && npm run lint && npm test && npm run build",
+    "size": "npm run build && node scripts/report-size.js",
+    "prepack": "npm run check",
+    "package:check": "npm pack --dry-run"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "4.2.0"
+  },
+  "devDependencies": {
+    "eslint": "10.8.1",
+    "prettier": "3.9.6",
+    "vite": "^8.1.5"
+  }
+}

@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#101218" />
+    <title>cue.js local demo</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <p class="eyebrow">Local development demo</p>
+        <h1>cue.js</h1>
+        <p>Speak the script and Cue will follow your position. Audio stays in this tab.</p>
+      </header>
+
+      <section class="controls" aria-label="Demo controls">
+        <label for="script">Script</label>
+        <textarea id="script" rows="6">
+Welcome to the cue dot js development demo. This small page has no application framework and no deployment assumptions. When you read these words aloud, the highlighted position should follow your voice.</textarea>
+        <div class="buttons">
+          <button id="load" type="button">Load script</button>
+          <button id="start" type="button">Start listening</button>
+          <button id="stop" type="button" disabled>Stop</button>
+        </div>
+        <p id="status" class="status" role="status">Idle</p>
+        <p id="transcript" class="transcript" aria-live="polite"></p>
+      </section>
+
+      <section id="prompter" class="prompter" aria-label="Teleprompter script"></section>
+    </main>
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
