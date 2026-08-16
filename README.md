@@ -4,10 +4,6 @@ A browser library for building voice-following teleprompters.
 
 ## Quick start
 
-```
-npm install cue-cursor.js
-```
-
 ```js
 import { createCue } from 'cue-cursor.js';
 import { moonshine } from 'cue-cursor.js/models';
