@@ -2,6 +2,11 @@ let recognizer = null;
 let loading = null;
 let runtime = null;
 
+function loadRuntime(runtimeUrl) {
+  if (runtimeUrl) return import(/* @vite-ignore */ runtimeUrl);
+  return import('@huggingface/transformers');
+}
+
 function applyRuntimeOptions(env, options) {
   env.allowLocalModels = false;
   if (options.modelBaseUrl) {
@@ -22,7 +27,7 @@ async function prepare(options) {
   if (loading) return loading;
 
   loading = (async () => {
-    runtime ??= import(/* @vite-ignore */ options.runtimeUrl);
+    runtime ??= loadRuntime(options.runtimeUrl);
     const { env, pipeline } = await runtime;
     applyRuntimeOptions(env, options);
     recognizer = await pipeline('automatic-speech-recognition', options.modelId, {

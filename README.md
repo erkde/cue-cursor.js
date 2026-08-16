@@ -35,10 +35,11 @@ cue.setScript([
 ]);
 ```
 
-The built-in Moonshine adapter emits its pinned Transformers.js dependency as a
-separate, lazy browser asset. It accepts optional `runtimeUrl`, `modelBaseUrl`,
-and `wasmBaseUrl` overrides for self-hosting. The library itself does not assume
-a hosting provider or proxy.
+The built-in Moonshine adapter bundles its pinned Transformers.js dependency as
+a separate, lazy browser asset. The ONNX Runtime WASM binary remains an external
+download; Transformers.js uses its pinned CDN location by default. The adapter
+accepts optional `runtimeUrl`, `modelBaseUrl`, and `wasmBaseUrl` overrides for
+self-hosting. The library itself does not assume a hosting provider or proxy.
 
 Applications that want the most explicit model boundary can import Moonshine
 directly. This guarantees that future built-in models cannot enter the same
@@ -64,10 +65,8 @@ listening**. The first start downloads and warms the default Moonshine model.
 ## Commands
 
 ```sh
-npm run dev    # local demo
 npm test       # unit tests
-npm run build  # package build
-npm run check  # tests and build
+npm run build  # build and validate the package output
 npm run size   # production output sizes: raw, gzip, and Brotli
-npm run package:check # verify tests, build, and published package contents
+npm run package:check # run every release check and inspect the package contents
 ```

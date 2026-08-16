@@ -1,10 +1,7 @@
-import defaultRuntimeUrl from '@huggingface/transformers?url&no-inline';
-
 const DEFAULT_OPTIONS = Object.freeze({
   modelId: 'onnx-community/moonshine-tiny-ONNX',
   revision: 'a6da1241cd305dcd64eab1edbd615f2bb9aabb95',
   dtype: 'q8',
-  runtimeUrl: defaultRuntimeUrl,
   sampleRate: 16_000,
   windowSeconds: 3,
   minimumSeconds: 1.5,
