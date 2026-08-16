@@ -1,5 +1,5 @@
 {
-  "name": "cue.js",
+  "name": "cue-cursor.js",
   "version": "0.1.0",
   "description": "A browser library for building voice-following teleprompters",
   "keywords": [
@@ -16,13 +16,13 @@
     }
   ],
   "license": "Apache-2.0",
-  "homepage": "https://github.com/erkde/cue.js#readme",
+  "homepage": "https://github.com/erkde/cue-cursor.js#readme",
   "bugs": {
-    "url": "https://github.com/erkde/cue.js/issues"
+    "url": "https://github.com/erkde/cue-cursor.js/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/erkde/cue.js.git"
+    "url": "git+https://github.com/erkde/cue-cursor.js.git"
   },
   "publishConfig": {
     "access": "public"

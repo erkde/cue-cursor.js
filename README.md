@@ -1,16 +1,16 @@
-# cue.js
+# cue-cursor.js
 
 A browser library for building voice-following teleprompters.
 
 ## Quick start
 
 ```
-npm install cue.js
+npm install cue-cursor.js
 ```
 
 ```js
-import { createCue } from 'cue.js';
-import { moonshine } from 'cue.js/models';
+import { createCue } from 'cue-cursor.js';
+import { moonshine } from 'cue-cursor.js/models';
 
 const cue = createCue({
   script: 'The words that should appear in the teleprompter.',
@@ -49,7 +49,7 @@ directly. This guarantees that future built-in models cannot enter the same
 module graph accidentally:
 
 ```js
-import { moonshine } from 'cue.js/models/moonshine';
+import { moonshine } from 'cue-cursor.js/models/moonshine';
 ```
 
 ## Local demo
