@@ -9,8 +9,16 @@ const DEFAULT_OPTIONS = Object.freeze({
   threads: 1,
 });
 
-class MoonshineModel {
+class DetailEvent extends Event {
+  constructor(type, detail) {
+    super(type);
+    this.detail = detail;
+  }
+}
+
+class MoonshineModel extends EventTarget {
   constructor(options) {
+    super();
     this.options = { ...DEFAULT_OPTIONS, ...options };
     this.input = Object.freeze({
       sampleRate: this.options.sampleRate,
@@ -24,25 +32,34 @@ class MoonshineModel {
     this.pending = new Map();
     this.progressCallback = null;
     this.prepared = false;
+    this.workerGeneration = 0;
   }
 
   async ensureWorker() {
     if (this.worker) return this.worker;
     if (!this.workerPromise) {
+      const generation = this.workerGeneration;
       // Keep the model runtime out of both the Cue core and the model adapter
       // chunk. Vite turns this worker import into a separate production asset,
       // fetched only when the model is prepared.
       this.workerPromise = import('./moonshine-worker.js?worker')
         .then(({ default: MoonshineWorker }) => {
-          this.worker = new MoonshineWorker();
-          this.worker.addEventListener('message', (event) => this.onMessage(event.data));
-          this.worker.addEventListener('error', (event) => {
-            this.rejectAll(new Error(event.message || 'Moonshine worker failed'));
+          const worker = new MoonshineWorker();
+          if (generation !== this.workerGeneration) {
+            worker.terminate();
+            throw new Error('Moonshine worker was terminated');
+          }
+          this.worker = worker;
+          worker.addEventListener('message', (event) => this.onMessage(event.data));
+          worker.addEventListener('error', (event) => {
+            const message = event.message || 'Moonshine worker failed';
+            this.emitDiagnostic({ kind: 'worker-error', phase: 'boot', message });
+            this.resetWorker(message);
           });
-          return this.worker;
+          return worker;
         })
         .catch((error) => {
-          this.workerPromise = null;
+          if (generation === this.workerGeneration) this.workerPromise = null;
           throw error;
         });
     }
@@ -67,8 +84,21 @@ class MoonshineModel {
     const pending = this.pending.get(message.id);
     if (!pending) return;
     this.pending.delete(message.id);
-    if (message.type === 'error') pending.reject(new Error(message.message));
-    else pending.resolve(message);
+    if (message.type === 'error') {
+      this.emitDiagnostic({
+        kind: 'worker-error',
+        phase: message.phase ?? 'unknown',
+        message: message.message,
+      });
+      pending.reject(new Error(message.message));
+    } else {
+      if (message.diagnostic) this.emitDiagnostic(message.diagnostic);
+      pending.resolve(message);
+    }
+  }
+
+  emitDiagnostic(detail) {
+    this.dispatchEvent(new DetailEvent('diagnostic', Object.freeze(detail)));
   }
 
   rejectAll(error) {
@@ -79,9 +109,12 @@ class MoonshineModel {
   async prepare({ onProgress } = {}) {
     if (this.prepared) return;
     this.progressCallback = onProgress ?? null;
-    await this.request('prepare', { options: this.options });
-    this.prepared = true;
-    this.progressCallback = null;
+    try {
+      await this.request('prepare', { options: this.options });
+      this.prepared = true;
+    } finally {
+      this.progressCallback = null;
+    }
   }
 
   async transcribe(audio) {
@@ -91,16 +124,28 @@ class MoonshineModel {
 
   async dispose() {
     if (!this.worker) return;
-    const worker = this.worker;
     try {
       await this.request('dispose');
     } finally {
-      worker.terminate();
-      this.worker = null;
-      this.workerPromise = null;
-      this.prepared = false;
-      this.rejectAll(new Error('Moonshine was disposed'));
+      this.resetWorker('Moonshine was disposed', 'dispose');
     }
+  }
+
+  terminate() {
+    this.resetWorker('Moonshine was terminated', 'pagehide');
+  }
+
+  resetWorker(message, reason) {
+    const worker = this.worker;
+    const existed = Boolean(worker || this.workerPromise);
+    this.workerGeneration += 1;
+    this.worker = null;
+    this.workerPromise = null;
+    this.prepared = false;
+    this.progressCallback = null;
+    worker?.terminate();
+    this.rejectAll(new Error(message));
+    if (existed && reason) this.emitDiagnostic({ kind: 'worker-terminated', reason });
   }
 }
 

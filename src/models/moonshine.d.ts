@@ -12,6 +12,7 @@ export interface MoonshineOptions {
   threads?: number;
   modelBaseUrl?: string;
   wasmBaseUrl?: string;
+  wasmPaths?: string | { mjs: string; wasm: string };
 }
 
 export function moonshine(options?: MoonshineOptions): CueModel;

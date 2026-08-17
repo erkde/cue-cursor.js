@@ -79,3 +79,77 @@ test('prepare reports model progress and settles ready', async () => {
   );
   await cue.destroy();
 });
+
+test('forwards privacy-safe model diagnostics with a schema version', async () => {
+  const model = Object.assign(new EventTarget(), fakeModel());
+  const cue = createCue({ script: 'one two', model });
+  const diagnostics = [];
+  cue.addEventListener('diagnostic', (event) => diagnostics.push(event.detail));
+
+  const event = new Event('diagnostic');
+  Object.defineProperty(event, 'detail', {
+    value: { kind: 'worker-error', phase: 'boot', message: 'failed' },
+  });
+  model.dispatchEvent(event);
+
+  assert.deepEqual(diagnostics, [
+    { version: 1, kind: 'worker-error', phase: 'boot', message: 'failed' },
+  ]);
+  await cue.destroy();
+});
+
+test('terminate synchronously delegates to models that support it', () => {
+  let terminated = false;
+  const model = Object.assign(new EventTarget(), fakeModel(), {
+    terminate() {
+      terminated = true;
+      const event = new Event('diagnostic');
+      Object.defineProperty(event, 'detail', {
+        value: { kind: 'worker-terminated', reason: 'pagehide' },
+      });
+      this.dispatchEvent(event);
+    },
+  });
+  const cue = createCue({ script: 'one two', model });
+  const diagnostics = [];
+  cue.addEventListener('diagnostic', (event) => diagnostics.push(event.detail));
+
+  cue.terminate();
+  cue.terminate();
+
+  assert.equal(terminated, true);
+  assert.equal(cue.state.status, 'destroyed');
+  assert.deepEqual(diagnostics, [{ version: 1, kind: 'worker-terminated', reason: 'pagehide' }]);
+});
+
+test('destroy settles in the destroyed state when asynchronous cleanup fails', async () => {
+  const model = Object.assign(fakeModel(), {
+    async dispose() {
+      throw new Error('cleanup failed');
+    },
+  });
+  const cue = createCue({ script: 'one two', model });
+
+  await assert.rejects(cue.destroy(), /cleanup failed/);
+  assert.equal(cue.state.status, 'destroyed');
+});
+
+test('a terminated model load cannot overwrite the destroyed state', async () => {
+  let rejectPrepare;
+  const model = Object.assign(fakeModel(), {
+    prepare() {
+      return new Promise((resolve, reject) => {
+        rejectPrepare = reject;
+      });
+    },
+    terminate() {},
+  });
+  const cue = createCue({ script: 'one two', model });
+  const preparing = cue.prepare();
+
+  cue.terminate();
+  rejectPrepare(new Error('worker terminated'));
+
+  await assert.rejects(preparing, /worker terminated/);
+  assert.equal(cue.state.status, 'destroyed');
+});

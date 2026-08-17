@@ -1,35 +1,28 @@
+import { applyRuntimeOptions } from './runtime-options.js';
+
 let recognizer = null;
 let loading = null;
 let runtime = null;
+let preparationDiagnostic = null;
+let preparationPhase = 'download';
 
 function loadRuntime(runtimeUrl) {
   if (runtimeUrl) return import(/* @vite-ignore */ runtimeUrl);
   return import('@huggingface/transformers');
 }
 
-function applyRuntimeOptions(env, options) {
-  env.allowLocalModels = false;
-  if (options.modelBaseUrl) {
-    env.remoteHost = options.modelBaseUrl.endsWith('/')
-      ? options.modelBaseUrl
-      : `${options.modelBaseUrl}/`;
-  }
-  if (options.wasmBaseUrl) {
-    env.backends.onnx.wasm.wasmPaths = options.wasmBaseUrl.endsWith('/')
-      ? options.wasmBaseUrl
-      : `${options.wasmBaseUrl}/`;
-  }
-  env.backends.onnx.wasm.numThreads = self.crossOriginIsolated ? options.threads : 1;
-}
-
 async function prepare(options) {
-  if (recognizer) return;
+  if (recognizer) return preparationDiagnostic;
   if (loading) return loading;
 
   loading = (async () => {
+    const startedAt = performance.now();
+    let warmupStartedAt = null;
+    let sawDownloadProgress = false;
+    preparationPhase = 'download';
     runtime ??= loadRuntime(options.runtimeUrl);
     const { env, pipeline } = await runtime;
-    applyRuntimeOptions(env, options);
+    const runtimeDiagnostic = applyRuntimeOptions(env, options, self);
     recognizer = await pipeline('automatic-speech-recognition', options.modelId, {
       device: 'wasm',
       dtype: options.dtype,
@@ -37,6 +30,7 @@ async function prepare(options) {
       session_options: { graphOptimizationLevel: 'basic' },
       progress_callback(progress) {
         if (progress.status !== 'progress' || !progress.loaded) return;
+        sawDownloadProgress = true;
         self.postMessage({
           type: 'progress',
           file: progress.file?.split('/').pop(),
@@ -45,8 +39,25 @@ async function prepare(options) {
         });
       },
     });
+    preparationPhase = 'warmup';
+    warmupStartedAt = performance.now();
     self.postMessage({ type: 'progress', phase: 'warmup' });
     await recognizer(new Float32Array(options.sampleRate));
+    const readyAt = performance.now();
+    preparationDiagnostic = Object.freeze({
+      kind: 'model-ready',
+      cached: !sawDownloadProgress,
+      totalMs: Math.round(readyAt - startedAt),
+      downloadMs: Math.round(warmupStartedAt - startedAt),
+      warmupMs: Math.round(readyAt - warmupStartedAt),
+      model: {
+        id: options.modelId,
+        revision: options.revision,
+        dtype: options.dtype,
+      },
+      runtime: runtimeDiagnostic,
+    });
+    return preparationDiagnostic;
   })();
 
   try {
@@ -60,8 +71,8 @@ self.onmessage = async (event) => {
   const { id, type } = event.data;
   try {
     if (type === 'prepare') {
-      await prepare(event.data.options);
-      self.postMessage({ type: 'prepared', id });
+      const diagnostic = await prepare(event.data.options);
+      self.postMessage({ type: 'prepared', id, diagnostic });
     } else if (type === 'transcribe') {
       if (!recognizer) throw new Error('Moonshine has not been prepared');
       const startedAt = performance.now();
@@ -76,6 +87,7 @@ self.onmessage = async (event) => {
       await loading?.catch(() => {});
       await recognizer?.dispose?.();
       recognizer = null;
+      preparationDiagnostic = null;
       self.postMessage({ type: 'disposed', id });
       self.close();
     }
@@ -83,6 +95,8 @@ self.onmessage = async (event) => {
     self.postMessage({
       type: 'error',
       id,
+      phase:
+        type === 'prepare' ? preparationPhase : type === 'transcribe' ? 'inference' : 'dispose',
       message: String(error?.message ?? error),
     });
   }

@@ -17,13 +17,29 @@ cue.addEventListener('positionchange', ({ detail }) => {
   highlightWord(detail.position);
 });
 
-startButton.addEventListener('click', () => cue.start());
-stopButton.addEventListener('click', () => cue.stop());
+// Diagnostics contain runtime metadata and timings, never audio or text.
+cue.addEventListener('diagnostic', ({ detail }) => {
+  console.debug(detail);
+});
+
+startButton.addEventListener('click', () => void cue.start());
+stopButton.addEventListener('click', () => void cue.stop());
 ```
 
-Call `start()` directly from a user gesture so browsers can unlock microphone
-capture, or call `prepare()` earlier if the application wants to download and warm
-the model before the user starts reading.
+`start()` begins listening and should be called directly from a user gesture so
+browsers can unlock microphone capture. `stop()` pauses listening while keeping
+the Cue instance available for another `start()`.
+
+Call `prepare()` earlier if the application wants to download and warm the model
+before the user starts reading.
+
+For lifecycle cleanup, call `cue.terminate()` from `pagehide` when the model worker
+must be stopped synchronously; use the asynchronous `cue.destroy()` for normal
+application shutdown so the model can dispose cleanly.
+
+```js
+window.addEventListener('pagehide', () => cue.terminate());
+```
 
 Scripts can be plain text or explicit words. Explicit words let a rich-text UI
 retain its own mapping:
@@ -37,7 +53,9 @@ cue.setScript([
 
 The built-in Moonshine adapter bundles its pinned Transformers.js dependency as
 a separate, lazy browser asset. The ONNX Runtime WASM binary remains an external
-download; Transformers.js uses its pinned CDN location by default. The adapter
+download; Transformers.js uses its pinned CDN location by default.
+
+The adapter
 accepts optional `runtimeUrl`, `modelBaseUrl`, and `wasmBaseUrl` overrides for
 self-hosting. The library itself does not assume a hosting provider or proxy.
 

@@ -48,6 +48,7 @@ export class Cue extends EventTarget {
   #positionVersion = 0;
   #lastTranscript = '';
   #visibilityHandler;
+  #modelDiagnosticHandler;
 
   constructor({ script = [], model }) {
     super();
@@ -57,7 +58,9 @@ export class Cue extends EventTarget {
     this.position = -1;
     this.setScript(script);
     this.#visibilityHandler = () => this.#onVisibilityChange();
+    this.#modelDiagnosticHandler = (event) => this.#emitDiagnostic(event.detail);
     globalThis.document?.addEventListener('visibilitychange', this.#visibilityHandler);
+    this.#model.addEventListener?.('diagnostic', this.#modelDiagnosticHandler);
   }
 
   get state() {
@@ -95,11 +98,12 @@ export class Cue extends EventTarget {
         },
       })
       .then(() => {
+        if (this.#destroyed) return;
         this.#prepared = true;
         if (!this.#active) this.#setState({ status: 'ready' });
       })
       .catch((error) => {
-        this.#setState({ status: 'error', error });
+        if (!this.#destroyed) this.#setState({ status: 'error', error });
         throw error;
       })
       .finally(() => {
@@ -140,7 +144,7 @@ export class Cue extends EventTarget {
       this.#active = false;
       await this.#syncCapture().catch(() => {});
       await Microphone.releasePrime().catch(() => {});
-      this.#setState({ status: 'error', error });
+      if (!this.#destroyed) this.#setState({ status: 'error', error });
       throw error;
     }
   }
@@ -181,9 +185,36 @@ export class Cue extends EventTarget {
     if (this.#destroyed) return;
     await this.stop();
     globalThis.document?.removeEventListener('visibilitychange', this.#visibilityHandler);
-    await this.#model.dispose();
-    this.#destroyed = true;
-    this.#setState({ status: 'destroyed' });
+    try {
+      await this.#model.dispose();
+    } finally {
+      this.#model.removeEventListener?.('diagnostic', this.#modelDiagnosticHandler);
+      this.#destroyed = true;
+      this.#setState({ status: 'destroyed' });
+    }
+  }
+
+  terminate() {
+    if (this.#destroyed) return;
+    this.#active = false;
+    this.#positionVersion += 1;
+    clearTimeout(this.#timer);
+    this.#timer = null;
+    const microphone = this.#microphone;
+    this.#microphone = null;
+    void microphone?.stop().catch(() => {});
+    void Microphone.releasePrime().catch(() => {});
+    globalThis.document?.removeEventListener('visibilitychange', this.#visibilityHandler);
+    try {
+      if (typeof this.#model.terminate === 'function') this.#model.terminate();
+      else void this.#model.dispose().catch(() => {});
+    } catch {
+      // Emergency page-lifecycle cleanup must not interrupt the caller.
+    } finally {
+      this.#model.removeEventListener?.('diagnostic', this.#modelDiagnosticHandler);
+      this.#destroyed = true;
+      this.#setState({ status: 'destroyed' });
+    }
   }
 
   #assertUsable() {
@@ -197,6 +228,11 @@ export class Cue extends EventTarget {
 
   #emit(type, detail) {
     this.dispatchEvent(new DetailEvent(type, detail));
+  }
+
+  #emitDiagnostic(detail) {
+    if (!detail || typeof detail.kind !== 'string') return;
+    this.#emit('diagnostic', Object.freeze({ ...detail, version: 1 }));
   }
 
   #isVisible() {
@@ -262,10 +298,30 @@ export class Cue extends EventTarget {
     }
 
     const positionVersion = this.#positionVersion;
+    const audioMs = Math.round((audio.length / sampleRate) * 1000);
     try {
+      const startedAt = performance.now();
       const result = await this.#model.transcribe(audio);
-      if (!this.#active || positionVersion !== this.#positionVersion) return;
-      this.#acceptTranscript(result);
+      const inferenceMs = Number.isFinite(result.inferenceMs)
+        ? result.inferenceMs
+        : Math.round(performance.now() - startedAt);
+      if (!this.#active || positionVersion !== this.#positionVersion) {
+        this.#emitDiagnostic({
+          kind: 'inference',
+          inferenceMs,
+          audioMs,
+          outcome: 'discarded',
+          moved: false,
+        });
+        return;
+      }
+      const outcome = this.#acceptTranscript({ ...result, inferenceMs });
+      this.#emitDiagnostic({
+        kind: 'inference',
+        inferenceMs,
+        audioMs,
+        ...outcome,
+      });
     } catch (error) {
       await this.#fail(error);
       return;
@@ -274,7 +330,8 @@ export class Cue extends EventTarget {
   }
 
   #acceptTranscript({ text, inferenceMs }) {
-    if (!text || text === this.#lastTranscript) return;
+    if (!text) return { outcome: 'empty', moved: false };
+    if (text === this.#lastTranscript) return { outcome: 'duplicate', moved: false };
     this.#lastTranscript = text;
     this.#emit('transcript', {
       text,
@@ -283,7 +340,9 @@ export class Cue extends EventTarget {
 
     const previousPosition = this.position;
     const position = this.#matcher.feed(text);
-    if (position == null || position === previousPosition) return;
+    if (position == null || position === previousPosition) {
+      return { outcome: 'transcript', moved: false };
+    }
     this.position = position;
     this.#emit('positionchange', {
       position,
@@ -291,6 +350,7 @@ export class Cue extends EventTarget {
       source: 'speech',
       transcript: text,
     });
+    return { outcome: 'transcript', moved: true };
   }
 
   async #fail(error) {

@@ -32,6 +32,71 @@ export interface CueModel {
   prepare(options?: { onProgress?: (progress: CueModelProgress) => void }): Promise<void>;
   transcribe(audio: Float32Array): Promise<CueModelResult>;
   dispose(): Promise<void>;
+  terminate?(): void;
+  addEventListener?(type: 'diagnostic', listener: (event: CueModelDiagnosticEvent) => void): void;
+  removeEventListener?(
+    type: 'diagnostic',
+    listener: (event: CueModelDiagnosticEvent) => void,
+  ): void;
+}
+
+export type CueDiagnostic =
+  | {
+      readonly version: 1;
+      readonly kind: 'model-ready';
+      readonly cached: boolean;
+      readonly totalMs: number;
+      readonly downloadMs: number;
+      readonly warmupMs: number;
+      readonly model: {
+        readonly id: string;
+        readonly revision: string;
+        readonly dtype: string;
+      };
+      readonly runtime: {
+        readonly name: string;
+        readonly version: string;
+        readonly backend: 'wasm';
+        readonly wasmBinary: 'standard' | 'asyncify' | 'runtime-default';
+        readonly threads: number;
+        readonly isolated: boolean;
+        readonly cores: number | null;
+        readonly simd: boolean | null;
+        readonly ios: boolean;
+      };
+    }
+  | {
+      readonly version: 1;
+      readonly kind: 'inference';
+      readonly inferenceMs: number;
+      readonly audioMs: number;
+      readonly outcome: 'empty' | 'duplicate' | 'transcript' | 'discarded';
+      readonly moved: boolean;
+    }
+  | {
+      readonly version: 1;
+      readonly kind: 'worker-error';
+      readonly phase: 'boot' | 'download' | 'warmup' | 'inference' | 'dispose' | 'unknown';
+      readonly message: string;
+    }
+  | {
+      readonly version: 1;
+      readonly kind: 'worker-terminated';
+      readonly reason: 'dispose' | 'pagehide';
+    };
+
+export interface CueModelDiagnosticEvent extends Event {
+  readonly detail: CueModelDiagnostic;
+}
+
+type WithoutVersion<Diagnostic> = Diagnostic extends { version: 1 }
+  ? Omit<Diagnostic, 'version'>
+  : never;
+
+export type CueModelDiagnostic = WithoutVersion<CueDiagnostic>;
+
+export interface CueDiagnosticEvent extends Event {
+  readonly detail: CueDiagnostic;
 }
 
 export type CueState =
@@ -70,10 +135,12 @@ export interface Cue extends EventTarget {
   stop(): Promise<void>;
   seek(position: number): number;
   destroy(): Promise<void>;
+  terminate(): void;
 
   addEventListener(type: 'statechange', listener: (event: CueStateEvent) => void): void;
   addEventListener(type: 'transcript', listener: (event: CueTranscriptEvent) => void): void;
   addEventListener(type: 'positionchange', listener: (event: CuePositionEvent) => void): void;
+  addEventListener(type: 'diagnostic', listener: (event: CueDiagnosticEvent) => void): void;
 }
 
 export function createCue(options: { script?: CueScript; model: CueModel }): Cue;
