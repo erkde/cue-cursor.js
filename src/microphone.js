@@ -2,12 +2,23 @@ const workletUrl = new URL('./pcm-worklet.js', import.meta.url);
 
 let primedContext = null;
 
+function withPhase(error, phase) {
+  const wrapped = new Error(String(error?.message ?? error), { cause: error });
+  wrapped.name = error?.name ?? 'Error';
+  wrapped.phase = phase;
+  return wrapped;
+}
+
 export class Microphone {
   static async prime() {
-    if (!primedContext || primedContext.state === 'closed') {
-      primedContext = new AudioContext();
+    try {
+      if (!primedContext || primedContext.state === 'closed') {
+        primedContext = new AudioContext();
+      }
+      if (primedContext.state === 'suspended') await primedContext.resume();
+    } catch (error) {
+      throw withPhase(error, 'audio-prime');
     }
-    if (primedContext.state === 'suspended') await primedContext.resume();
   }
 
   static async releasePrime() {
@@ -59,7 +70,7 @@ export class Microphone {
       this.node.connect(this.sink).connect(this.context.destination);
     } catch (error) {
       await this.stop();
-      throw error;
+      throw withPhase(error, 'microphone');
     }
   }
 

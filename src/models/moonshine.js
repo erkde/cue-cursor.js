@@ -90,7 +90,9 @@ class MoonshineModel extends EventTarget {
         phase: message.phase ?? 'unknown',
         message: message.message,
       });
-      pending.reject(new Error(message.message));
+      const error = new Error(message.message);
+      error.phase = message.phase ?? 'unknown';
+      pending.reject(error);
     } else {
       if (message.diagnostic) this.emitDiagnostic(message.diagnostic);
       pending.resolve(message);
