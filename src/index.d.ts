@@ -83,6 +83,10 @@ export type CueDiagnostic =
       readonly version: 1;
       readonly kind: 'worker-terminated';
       readonly reason: 'dispose' | 'pagehide';
+    }
+  | {
+      readonly version: 1;
+      readonly kind: 'capture-started' | 'capture-stopped';
     };
 
 export interface CueModelDiagnosticEvent extends Event {

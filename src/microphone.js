@@ -1,6 +1,7 @@
 const workletUrl = new URL('./pcm-worklet.js', import.meta.url);
 
 let primedContext = null;
+const CONTEXT_CLOSE_TIMEOUT_MS = 1000;
 
 function withPhase(error, phase) {
   const wrapped = new Error(String(error?.message ?? error), { cause: error });
@@ -98,7 +99,15 @@ export class Microphone {
     this.node?.disconnect();
     this.sink?.disconnect();
     this.stream?.getTracks().forEach((track) => track.stop());
-    await this.context?.close();
+    const context = this.context;
+    if (context) {
+      await Promise.race([
+        context.close().catch(() => {}),
+        new Promise((resolve) => {
+          setTimeout(resolve, CONTEXT_CLOSE_TIMEOUT_MS);
+        }),
+      ]);
+    }
     this.context = null;
     this.stream = null;
     this.source = null;

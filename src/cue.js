@@ -265,9 +265,11 @@ export class Cue extends EventTarget {
             if (this.#microphone === microphone) this.#microphone = null;
             throw error;
           }
+          this.#emitDiagnostic({ kind: 'capture-started' });
           if (!(this.#active && this.#isVisible())) {
             this.#microphone = null;
             await microphone.stop();
+            this.#emitDiagnostic({ kind: 'capture-stopped' });
           }
         } else if (!wanted && this.#microphone) {
           const microphone = this.#microphone;
@@ -275,6 +277,7 @@ export class Cue extends EventTarget {
           clearTimeout(this.#timer);
           this.#timer = null;
           await microphone.stop();
+          this.#emitDiagnostic({ kind: 'capture-stopped' });
         }
       });
     return this.#captureSync;
