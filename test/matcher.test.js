@@ -30,10 +30,39 @@ test('small backward wobble is ignored but a genuine reread is honored', () => {
   const matcher = fresh();
   matcher.feed('oscar papa quebec');
   const held = matcher.cursor;
-  matcher.feed('november oscar papa');
+  const observation = matcher.feedWithResult('november oscar papa');
+  assert.deepEqual(observation, {
+    previousPosition: held,
+    candidatePosition: 15,
+    position: held,
+    outcome: 'held',
+  });
   assert.equal(matcher.cursor, held);
   matcher.feed('alpha bravo charlie');
   assert.ok(matcher.cursor <= 3);
+});
+
+test('feedWithResult distinguishes unmatched, stationary, and moved transcripts', () => {
+  const matcher = fresh();
+
+  assert.deepEqual(matcher.feedWithResult('unrelated language'), {
+    previousPosition: 0,
+    candidatePosition: null,
+    position: 0,
+    outcome: 'unmatched',
+  });
+  assert.deepEqual(matcher.feedWithResult('alpha bravo'), {
+    previousPosition: 0,
+    candidatePosition: 1,
+    position: 1,
+    outcome: 'moved',
+  });
+  assert.deepEqual(matcher.feedWithResult('alpha bravo'), {
+    previousPosition: 1,
+    candidatePosition: 1,
+    position: 1,
+    outcome: 'stationary',
+  });
 });
 
 test('seek clamps and reanchors the matcher', () => {

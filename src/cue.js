@@ -43,6 +43,8 @@ export class Cue extends EventTarget {
   #active = false;
   #destroyed = false;
   #microphone = null;
+  #captureActive = false;
+  #speechActive = false;
   #captureSync = Promise.resolve();
   #timer = null;
   #positionVersion = 0;
@@ -203,6 +205,8 @@ export class Cue extends EventTarget {
     const microphone = this.#microphone;
     this.#microphone = null;
     void microphone?.stop().catch(() => {});
+    this.#setSpeechActive(false);
+    this.#setCaptureActive(false);
     void Microphone.releasePrime().catch(() => {});
     globalThis.document?.removeEventListener('visibilitychange', this.#visibilityHandler);
     try {
@@ -235,6 +239,18 @@ export class Cue extends EventTarget {
     this.#emit('diagnostic', Object.freeze({ ...detail, version: 1 }));
   }
 
+  #setCaptureActive(active) {
+    if (this.#captureActive === active) return;
+    this.#captureActive = active;
+    this.#emit('capturechange', Object.freeze({ active }));
+  }
+
+  #setSpeechActive(active) {
+    if (this.#speechActive === active) return;
+    this.#speechActive = active;
+    this.#emit('speechactivitychange', Object.freeze({ active, position: this.position }));
+  }
+
   #isVisible() {
     return !globalThis.document || globalThis.document.visibilityState === 'visible';
   }
@@ -265,10 +281,14 @@ export class Cue extends EventTarget {
             if (this.#microphone === microphone) this.#microphone = null;
             throw error;
           }
+          this.#setCaptureActive(true);
           this.#emitDiagnostic({ kind: 'capture-started' });
           if (!(this.#active && this.#isVisible())) {
             this.#microphone = null;
-            await microphone.stop();
+            const stopping = microphone.stop();
+            this.#setSpeechActive(false);
+            this.#setCaptureActive(false);
+            await stopping;
             this.#emitDiagnostic({ kind: 'capture-stopped' });
           }
         } else if (!wanted && this.#microphone) {
@@ -276,7 +296,10 @@ export class Cue extends EventTarget {
           this.#microphone = null;
           clearTimeout(this.#timer);
           this.#timer = null;
-          await microphone.stop();
+          const stopping = microphone.stop();
+          this.#setSpeechActive(false);
+          this.#setCaptureActive(false);
+          await stopping;
           this.#emitDiagnostic({ kind: 'capture-stopped' });
         }
       });
@@ -292,10 +315,13 @@ export class Cue extends EventTarget {
     if (!this.#active || !this.#microphone) return;
     const { sampleRate, windowSeconds, minimumSeconds } = this.#model.input;
     const audio = this.#microphone.latest(windowSeconds);
-    if (
-      !enoughAudioForAsr(audio.length, { sampleRate, minimumSeconds }) ||
-      !rmsGateOpen(audio, { sampleRate })
-    ) {
+    if (!enoughAudioForAsr(audio.length, { sampleRate, minimumSeconds })) {
+      this.#scheduleInference();
+      return;
+    }
+    const speechActive = rmsGateOpen(audio, { sampleRate });
+    this.#setSpeechActive(speechActive);
+    if (!speechActive) {
       this.#scheduleInference();
       return;
     }
@@ -336,20 +362,27 @@ export class Cue extends EventTarget {
     if (!text) return { outcome: 'empty', moved: false };
     if (text === this.#lastTranscript) return { outcome: 'duplicate', moved: false };
     this.#lastTranscript = text;
+    const positionVersion = this.#positionVersion;
+    const match = this.#matcher.feedWithResult(text);
     this.#emit('transcript', {
       text,
       ...(inferenceMs == null ? {} : { inferenceMs }),
+      match: Object.freeze({ ...match }),
     });
 
-    const previousPosition = this.position;
-    const position = this.#matcher.feed(text);
-    if (position == null || position === previousPosition) {
+    // A transcript listener may deliberately seek before dispatch returns.
+    // Keep that explicit application action authoritative over this match.
+    if (
+      match.outcome !== 'moved' ||
+      this.#positionVersion !== positionVersion ||
+      this.position !== match.previousPosition
+    ) {
       return { outcome: 'transcript', moved: false };
     }
-    this.position = position;
+    this.position = match.position;
     this.#emit('positionchange', {
-      position,
-      previousPosition,
+      position: match.position,
+      previousPosition: match.previousPosition,
       source: 'speech',
       transcript: text,
     });

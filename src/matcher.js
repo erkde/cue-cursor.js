@@ -51,13 +51,33 @@ export class Matcher {
   }
 
   feed(text) {
+    const result = this.feedWithResult(text);
+    return result.outcome === 'unmatched' ? null : result.position;
+  }
+
+  feedWithResult(text) {
+    const previousPosition = this.cursor;
     const spoken = text.split(/\s+/).map(normalizeWord).filter(Boolean).slice(-14);
-    if (spoken.length < 2) return null;
+    if (spoken.length < 2) {
+      return {
+        previousPosition,
+        candidatePosition: null,
+        position: previousPosition,
+        outcome: 'unmatched',
+      };
+    }
 
     const lo = Math.max(0, this.cursor - 25);
     const hi = Math.min(this.tokens.length, this.cursor + 90);
     const window = this.tokens.slice(lo, hi);
-    if (!window.length) return null;
+    if (!window.length) {
+      return {
+        previousPosition,
+        candidatePosition: null,
+        position: previousPosition,
+        outcome: 'unmatched',
+      };
+    }
 
     const rowCount = spoken.length;
     const columnCount = window.length;
@@ -99,13 +119,33 @@ export class Matcher {
       : confident(prefixCandidate)
         ? prefixCandidate
         : null;
-    if (!candidate) return null;
-
-    const position = lo + candidate.column - 1;
-    if (position < this.cursor && this.cursor - position <= BACK_TOLERANCE) {
-      return this.cursor;
+    if (!candidate) {
+      return {
+        previousPosition,
+        candidatePosition: null,
+        position: previousPosition,
+        outcome: 'unmatched',
+      };
     }
-    this.cursor = position;
-    return position;
+
+    const candidatePosition = lo + candidate.column - 1;
+    if (
+      candidatePosition < previousPosition &&
+      previousPosition - candidatePosition <= BACK_TOLERANCE
+    ) {
+      return {
+        previousPosition,
+        candidatePosition,
+        position: previousPosition,
+        outcome: 'held',
+      };
+    }
+    this.cursor = candidatePosition;
+    return {
+      previousPosition,
+      candidatePosition,
+      position: candidatePosition,
+      outcome: candidatePosition === previousPosition ? 'stationary' : 'moved',
+    };
   }
 }

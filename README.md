@@ -51,6 +51,44 @@ cue.setScript([
 ]);
 ```
 
+## Reading observations
+
+Cue exposes neutral observations so applications can build reading session histories,
+partial reviews, overlays, or other script-related tools without the library
+deciding what counts as a mistake.
+
+`capturechange` reports when microphone capture actually starts and stops. This
+can differ from the requested listening state when the document is hidden or
+the model is still preparing. `speechactivitychange` reports transitions from
+Cue's audio gate and includes the script position at that moment.
+It is an estimate of speech activity, not a definitive voice classification.
+
+```js
+cue.addEventListener('capturechange', ({ detail }) => {
+  console.log('capturing:', detail.active);
+});
+
+cue.addEventListener('speechactivitychange', ({ detail, timeStamp }) => {
+  console.log('speech activity:', detail.active, detail.position, timeStamp);
+});
+```
+
+Each non-empty, non-duplicate `transcript` includes the matcher's observation.
+`candidatePosition` is where the speech matched, while `position` is the cursor
+position Cue actually applied. They differ when Cue deliberately holds a small
+backward match to keep the prompter stable.
+
+```js
+cue.addEventListener('transcript', ({ detail, timeStamp }) => {
+  const { previousPosition, candidatePosition, position, outcome } = detail.match;
+  console.log({ timeStamp, previousPosition, candidatePosition, position, outcome });
+});
+```
+
+Event `timeStamp` values provide the monotonic timeline. Applications own reading session
+boundaries: stopping Cue can end a capture segment without requiring the
+application to discard the observations collected so far.
+
 The built-in Moonshine adapter bundles its pinned Transformers.js dependency as
 a separate, lazy browser asset. The ONNX Runtime WASM binary remains an external
 download; Transformers.js uses its pinned CDN location by default.

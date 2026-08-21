@@ -115,8 +115,32 @@ export interface CueStateEvent extends Event {
   readonly detail: CueState;
 }
 
+export type CueMatchOutcome = 'unmatched' | 'held' | 'stationary' | 'moved';
+
+export interface CueMatchObservation {
+  readonly previousPosition: number;
+  readonly candidatePosition: number | null;
+  readonly position: number;
+  readonly outcome: CueMatchOutcome;
+}
+
 export interface CueTranscriptEvent extends Event {
-  readonly detail: CueModelResult;
+  readonly detail: CueModelResult & {
+    readonly match: CueMatchObservation;
+  };
+}
+
+export interface CueCaptureEvent extends Event {
+  readonly detail: {
+    readonly active: boolean;
+  };
+}
+
+export interface CueSpeechActivityEvent extends Event {
+  readonly detail: {
+    readonly active: boolean;
+    readonly position: number;
+  };
 }
 
 export interface CuePositionEvent extends Event {
@@ -142,6 +166,11 @@ export interface Cue extends EventTarget {
   terminate(): void;
 
   addEventListener(type: 'statechange', listener: (event: CueStateEvent) => void): void;
+  addEventListener(type: 'capturechange', listener: (event: CueCaptureEvent) => void): void;
+  addEventListener(
+    type: 'speechactivitychange',
+    listener: (event: CueSpeechActivityEvent) => void,
+  ): void;
   addEventListener(type: 'transcript', listener: (event: CueTranscriptEvent) => void): void;
   addEventListener(type: 'positionchange', listener: (event: CuePositionEvent) => void): void;
   addEventListener(type: 'diagnostic', listener: (event: CueDiagnosticEvent) => void): void;
