@@ -64,7 +64,7 @@
     "package:check": "npm pack --dry-run"
   },
   "devDependencies": {
-    "@huggingface/transformers": "4.2.0",
+    "@huggingface/transformers": "4.3.0",
     "eslint": "10.8.1",
     "prettier": "3.9.6",
     "vite": "^8.1.5"
