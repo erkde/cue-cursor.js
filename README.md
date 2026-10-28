@@ -15,15 +15,15 @@ npm install cue-cursor.js
 ## Create a cursor
 
 ```js
-import { createCue } from "cue-cursor.js";
-import { moonshine } from "cue-cursor.js/models/moonshine";
+import { createCue } from 'cue-cursor.js';
+import { moonshine } from 'cue-cursor.js/models/moonshine';
 
 const cue = createCue({
-  script: "The words that should appear in the teleprompter.",
+  script: 'The words that should appear in the teleprompter.',
   model: moonshine(),
 });
 
-cue.addEventListener("positionchange", ({ detail }) => {
+cue.addEventListener('positionchange', ({ detail }) => {
   highlightWord(detail.position);
 });
 ```
@@ -37,8 +37,8 @@ Call `start()` directly from a click or tap. Browsers generally require a user
 gesture before they allow microphone capture.
 
 ```js
-startButton.addEventListener("click", () => void cue.start());
-stopButton.addEventListener("click", () => void cue.stop());
+startButton.addEventListener('click', () => void cue.start());
+stopButton.addEventListener('click', () => void cue.stop());
 ```
 
 `stop()` pauses listening without discarding the model or script. The same Cue
@@ -65,8 +65,8 @@ back to rendered elements:
 
 ```js
 cue.setScript([
-  { text: "Welcome", key: "word-1" },
-  { text: "back.", key: "word-2" },
+  { text: 'Welcome', key: 'word-1' },
+  { text: 'back.', key: 'word-2' },
 ]);
 ```
 
@@ -87,12 +87,12 @@ Requested listening and actual microphone capture are not always the same. The
 model may still be preparing, or the page may have become hidden.
 
 ```js
-cue.addEventListener("capturechange", ({ detail }) => {
-  console.log("capturing:", detail.active);
+cue.addEventListener('capturechange', ({ detail }) => {
+  console.log('capturing:', detail.active);
 });
 
-cue.addEventListener("speechactivitychange", ({ detail, timeStamp }) => {
-  console.log("speech activity:", detail.active, detail.position, timeStamp);
+cue.addEventListener('speechactivitychange', ({ detail, timeStamp }) => {
+  console.log('speech activity:', detail.active, detail.position, timeStamp);
 });
 ```
 
@@ -105,9 +105,8 @@ review interface.
 Each non-empty, non-duplicate transcript includes a neutral match observation:
 
 ```js
-cue.addEventListener("transcript", ({ detail, timeStamp }) => {
-  const { previousPosition, candidatePosition, position, outcome } =
-    detail.match;
+cue.addEventListener('transcript', ({ detail, timeStamp }) => {
+  const { previousPosition, candidatePosition, position, outcome } = detail.match;
   console.log({
     timeStamp,
     previousPosition,
@@ -143,7 +142,7 @@ Diagnostics contain model/runtime metadata and timings. They never contain
 audio or recognized text.
 
 ```js
-cue.addEventListener("diagnostic", ({ detail }) => {
+cue.addEventListener('diagnostic', ({ detail }) => {
   console.debug(detail);
 });
 ```
@@ -164,7 +163,7 @@ Use `terminate()` when a `pagehide` handler must stop the model worker
 synchronously:
 
 ```js
-window.addEventListener("pagehide", () => cue.terminate());
+window.addEventListener('pagehide', () => cue.terminate());
 ```
 
 Termination permanently destroys that Cue instance. If the page is restored
@@ -176,7 +175,7 @@ listening again.
 Importing the adapter directly keeps the model boundary explicit:
 
 ```js
-import { moonshine } from "cue-cursor.js/models/moonshine";
+import { moonshine } from 'cue-cursor.js/models/moonshine';
 ```
 
 The shorter `cue-cursor.js/models` export is also available. A direct import
